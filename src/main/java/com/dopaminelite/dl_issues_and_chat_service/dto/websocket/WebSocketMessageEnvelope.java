@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 
 @Getter
@@ -19,6 +18,6 @@ public class WebSocketMessageEnvelope {
     private String type;
     private UUID issueId;
     private String clientMessageId;
-    private Map<String, Object> payload;
+    private Object payload;
     private Instant timestamp;
 }
