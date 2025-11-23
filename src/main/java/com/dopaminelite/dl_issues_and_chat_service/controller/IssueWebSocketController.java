@@ -1,4 +1,4 @@
-package com.dopaminelite.dl_issues_and_chat_service.websocket;
+package com.dopaminelite.dl_issues_and_chat_service.controller;
 
 import com.dopaminelite.dl_issues_and_chat_service.dto.websocket.WebSocketMessageEnvelope;
 import com.dopaminelite.dl_issues_and_chat_service.dto.websocket.WebSocketMessageEventPayload;
@@ -22,18 +22,20 @@ public class IssueWebSocketController {
 
     @MessageMapping("/issues/{issueId}/send")
     public void sendMessage(
-            @DestinationVariable("issueId") UUID issueId,
+            @DestinationVariable UUID issueId,
             WebSocketSendMessagePayload payload
     ) {
         IssueMessage msg = messageService.createMessage(issueId, payload.getContent(), payload.getAttachments());
+
         WebSocketMessageEventPayload eventPayload = new WebSocketMessageEventPayload(msg);
 
+        // Wrap in envelope and send
         messagingTemplate.convertAndSend(
                 "/topic/issues/" + issueId,
                 WebSocketMessageEnvelope.builder()
                         .type("MESSAGE")
                         .issueId(issueId)
-                        .payload(eventPayload)
+                        .payload(eventPayload) // sends as JSON using Jackson
                         .build()
         );
     }

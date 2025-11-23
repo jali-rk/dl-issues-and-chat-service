@@ -1,5 +1,6 @@
 package com.dopaminelite.dl_issues_and_chat_service.service;
 
+import com.dopaminelite.dl_issues_and_chat_service.dto.IssueMessageListResponse;
 import com.dopaminelite.dl_issues_and_chat_service.dto.UploadedFileRef;
 import com.dopaminelite.dl_issues_and_chat_service.entity.IssueMessage;
 import com.dopaminelite.dl_issues_and_chat_service.repository.IssueMessageRepository;
@@ -7,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,7 +26,13 @@ public class IssueMessageService {
         return issueMessageRepository.save(msg);
     }
 
-    public List<IssueMessage> listMessages(UUID issueId, int offset, int limit) {
-        return issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(issueId, PageRequest.of(offset / limit, limit));
+    public IssueMessageListResponse listMessages(UUID issueId, int offset, int limit) {
+        List<IssueMessage> messages = issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(
+                issueId, PageRequest.of(offset / limit, limit)
+        );
+        return IssueMessageListResponse.builder()
+                .items(messages)
+                .total(messages.size())
+                .build();
     }
 }
