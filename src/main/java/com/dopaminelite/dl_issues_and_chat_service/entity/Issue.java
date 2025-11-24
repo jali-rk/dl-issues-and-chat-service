@@ -45,14 +45,17 @@ public class Issue {
 
     private UUID assignedAdminId;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private IssueStatus status = IssueStatus.OPEN;
 
+    @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private IssueAssignmentStatus assignmentStatus = IssueAssignmentStatus.UNASSIGNED;
 
+    @Builder.Default
     @Column(nullable = false)
     private boolean isChatReadOnly = false;
 
@@ -66,6 +69,7 @@ public class Issue {
 
     private Instant solvedAt;
 
+    @Builder.Default
     @ElementCollection
     @CollectionTable(name = "dopaminelite_issue_attachments", joinColumns = @JoinColumn(name = "issue_id"))
     private List<UploadedFileRef> attachments = new ArrayList<>();
