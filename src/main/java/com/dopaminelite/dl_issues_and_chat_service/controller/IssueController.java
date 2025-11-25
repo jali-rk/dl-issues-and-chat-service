@@ -6,7 +6,7 @@ import com.dopaminelite.dl_issues_and_chat_service.dto.*;
 import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
 import com.dopaminelite.dl_issues_and_chat_service.service.IssueService;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -16,15 +16,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/issues")
 public class IssueController {
 
     private final IssueService issueService;
-
-    @Autowired
-    public IssueController(IssueService issueService) {
-        this.issueService = issueService;
-    }
 
     @PostMapping
     public ResponseEntity<IssueResponse> createIssue(@Valid @RequestBody IssueCreateRequest request) {
@@ -84,7 +80,8 @@ public class IssueController {
             Issue updatedIssue = issueService.updateIssueStatus(issueId, request);
             return ResponseEntity.ok(IssueResponse.fromDomain(updatedIssue));
         } catch (RuntimeException e) {
-            if (e.getMessage().contains("Invalid status transition")) {
+            String msg = e.getMessage() != null ? e.getMessage() : "";
+            if (msg.contains("Cannot transition from") || msg.contains("Invalid status transition")) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();

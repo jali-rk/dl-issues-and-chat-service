@@ -7,7 +7,7 @@ import com.dopaminelite.dl_issues_and_chat_service.dto.IssueCreateRequest;
 import com.dopaminelite.dl_issues_and_chat_service.dto.IssueUpdateStatusRequest;
 import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
 import com.dopaminelite.dl_issues_and_chat_service.repository.IssueRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -17,14 +17,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class IssueService {
 
     private final IssueRepository issueRepository;
-
-    @Autowired
-    public IssueService(IssueRepository issueRepository) {
-        this.issueRepository = issueRepository;
-    }
 
     public Issue createIssue(IssueCreateRequest request) {
         Issue issue = new Issue();
@@ -49,6 +45,14 @@ public class IssueService {
                                                IssueAssignmentStatus assignmentStatus,
                                                UUID assignedAdminId,
                                                Pageable pageable) {
+        if (assignedAdminId != null && assignmentStatus == null && status == null) {
+            return issueRepository.findByAssignedAdminId(assignedAdminId, pageable);
+        }
+        if (assignedAdminId == null) {
+            assignmentStatus = IssueAssignmentStatus.UNASSIGNED;
+            status = IssueStatus.OPEN;
+            return issueRepository.findByStatusAndAssignmentStatus(status, assignmentStatus, pageable);
+        }
         return issueRepository.findByStatusAndAssignmentStatusAndAssignedAdminId(status, assignmentStatus,
                 assignedAdminId, pageable);
     }

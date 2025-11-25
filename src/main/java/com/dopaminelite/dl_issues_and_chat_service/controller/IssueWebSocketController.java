@@ -8,6 +8,7 @@ import com.dopaminelite.dl_issues_and_chat_service.service.IssueMessageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
@@ -21,6 +22,7 @@ public class IssueWebSocketController {
     private final IssueMessageService messageService;
 
     @MessageMapping("/issues/{issueId}/send")
+    @SendTo("/topic/issues/{issueId}")
     public void sendMessage(
             @DestinationVariable UUID issueId,
             WebSocketSendMessagePayload payload

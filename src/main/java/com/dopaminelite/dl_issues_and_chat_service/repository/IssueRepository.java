@@ -8,7 +8,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,5 +24,12 @@ public interface IssueRepository extends JpaRepository<Issue, UUID> {
 
     Optional<Issue> findById(UUID id);
 
-    List<Issue> findByAssignedAdminId(UUID adminId);
+    Page<Issue> findByAssignedAdminId(UUID adminId, Pageable pageable);
+
+    Page<Issue> findByStatusAndAssignmentStatus(
+            IssueStatus status,
+            IssueAssignmentStatus assignmentStatus,
+            Pageable pageable
+    );
+
 }
