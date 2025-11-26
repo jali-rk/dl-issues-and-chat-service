@@ -6,43 +6,72 @@ import com.dopaminelite.dl_issues_and_chat_service.dto.UploadedFileRef;
 import com.dopaminelite.dl_issues_and_chat_service.entity.IssueMessage;
 import com.dopaminelite.dl_issues_and_chat_service.repository.IssueMessageRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class IssueMessageService {
 
     private final IssueMessageRepository issueMessageRepository;
 
-    public IssueMessage createMessage(UUID issueId, String content, List<UploadedFileRef> attachments) {
-        // Note: senderId and senderRole are non-nullable in IssueMessage entity.
-        // At the moment there is no authentication context in this module, so we use a generated senderId
-        // and a sensible default role. If authentication is added later, this should be replaced with
-        // the authenticated principal's id and role.
-        UUID senderId = UUID.randomUUID();
-        Role senderRole = Role.STUDENT;
+    public IssueMessage createMessage(UUID issueId,
+                                      String content,
+                                      List<UploadedFileRef> attachments,
+                                      UUID senderId,
+                                      String senderRole) {
+        if (issueId == null) {
+            throw new IllegalArgumentException("issueId is required");
+        }
+
+        // Fallback sender id & role if authentication is not present
+        UUID resolvedSenderId = senderId != null ? senderId : UUID.randomUUID();
+        Role resolvedRole;
+        try {
+            resolvedRole = senderRole != null ? Role.valueOf(senderRole) : Role.STUDENT;
+        } catch (Exception ex) {
+            resolvedRole = Role.STUDENT;
+        }
+
+        // If your IssueMessage entity stores e.g. a single attachment, pick the first.
+        UploadedFileRef attachment = (attachments != null && !attachments.isEmpty()) ? attachments.get(0) : null;
 
         IssueMessage msg = IssueMessage.builder()
                 .issueId(issueId)
                 .content(content)
-                .attachment(attachments != null && !attachments.isEmpty() ? attachments.get(0) : null)
-                .senderId(senderId)
-                .senderRole(senderRole)
+                .attachment(attachment)
+                .senderId(resolvedSenderId)
+                .senderRole(resolvedRole)
+                .createdAt(Instant.now())
                 .build();
-        return issueMessageRepository.save(msg);
+
+        IssueMessage saved = issueMessageRepository.save(msg);
+        log.debug("Saved IssueMessage id={} for issueId={}", saved.getId(), issueId);
+        return saved;
+    }
+
+    public IssueMessage createMessage(UUID issueId,
+                                      String content,
+                                      List<UploadedFileRef> attachments) {
+        return createMessage(issueId, content, attachments, null, null);
     }
 
     public IssueMessageListResponse listMessages(UUID issueId, int offset, int limit) {
-        List<IssueMessage> messages = issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(
-                issueId, PageRequest.of(offset / limit, limit)
-        );
+        if (issueId == null) {
+            throw new IllegalArgumentException("issueId is required");
+        }
+        PageRequest pageRequest = PageRequest.of(Math.max(0, offset), Math.max(1, limit));
+        var page = issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(issueId, pageRequest);
+
         return IssueMessageListResponse.builder()
-                .items(messages)
-                .total(messages.size())
+                .items(page.getContent())
+                .total((int) page.getTotalElements())
                 .build();
     }
 }

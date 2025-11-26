@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket STOMP Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</head>
+<body>
+<h1>STOMP WebSocket Test</h1>
+<script>
+    const socket = new SockJS("http://localhost:8080/ws");
+    const stompClient = Stomp.over(socket);
+
+    stompClient.connect({}, () => {
+        console.log("Connected");
+
+        stompClient.subscribe("/topic/issues/0520c69f-b101-4a32-9789-811dc942902c", (msg) => {
+            console.log("Received:", JSON.parse(msg.body));
+        });
+
+        stompClient.send("/app/issues/0520c69f-b101-4a32-9789-811dc942902c/send", {}, JSON.stringify({
+            sender: "Harith",
+            content: "Hello, this is a test!"
+        }));
+    });
+</script>
+</body>
+</html>

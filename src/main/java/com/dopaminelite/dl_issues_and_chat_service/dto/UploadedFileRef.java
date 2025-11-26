@@ -1,7 +1,6 @@
 package com.dopaminelite.dl_issues_and_chat_service.dto;
 
 import jakarta.persistence.Embeddable;
-import jakarta.persistence.Column;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,13 +15,10 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 public class UploadedFileRef {
-    @Column(nullable = false)
     private String fileId;
 
-    @Column(nullable = false)
     private String fileName;
 
-    @Column(nullable = false)
     private String fileType;
 }
 

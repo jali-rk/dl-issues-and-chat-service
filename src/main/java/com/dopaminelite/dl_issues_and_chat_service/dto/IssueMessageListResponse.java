@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 
@@ -15,4 +16,11 @@ import java.util.List;
 public class IssueMessageListResponse {
     private List<IssueMessage> items;
     private int total;
+
+    public static IssueMessageListResponse from(Page<IssueMessage> messages) {
+        return IssueMessageListResponse.builder()
+                .items(messages.getContent())
+                .total((int) messages.getTotalElements())
+                .build();
+    }
 }

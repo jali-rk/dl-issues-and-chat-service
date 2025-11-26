@@ -42,7 +42,11 @@ public class IssueController {
 
         if (studentId != null) {
             issues = issueService.getIssuesByStudent(studentId, pageable);
-        } else {
+        }
+        else if (status == null && assignmentStatus == null && assignedAdminId == null) {
+            issues = issueService.getAllIssues(pageable);
+        }
+        else {
             issues = issueService.getIssuesByAdminFilters(status, assignmentStatus, assignedAdminId, pageable);
         }
 
@@ -85,6 +89,41 @@ public class IssueController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+    }
+
+    @GetMapping("/{issueId}/messages")
+    public ResponseEntity<?> listIssueMessages(
+            @PathVariable UUID issueId,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "10") int limit) {
+        // Check if issue exists
+        if (issueService.getIssueById(issueId).isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorObject("Issue not found"));
+        }
+        PageRequest pageable = PageRequest.of(offset, limit);
+        var messages = issueService.getMessagesByIssueId(issueId, pageable);
+        IssueMessageListResponse response = IssueMessageListResponse.from(messages);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{issueId}/report")
+    public ResponseEntity<?> downloadIssueReport(@PathVariable UUID issueId) {
+        var issueOpt = issueService.getIssueById(issueId);
+        if (issueOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorObject("Issue not found"));
+        }
+        try {
+            byte[] pdf = issueService.generateIssueReport(issueId);
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=issue-report.pdf")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorObject(e.getMessage()));
         }
     }
 }
