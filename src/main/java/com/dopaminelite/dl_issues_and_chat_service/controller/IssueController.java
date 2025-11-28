@@ -1,7 +1,5 @@
 package com.dopaminelite.dl_issues_and_chat_service.controller;
 
-import com.dopaminelite.dl_issues_and_chat_service.constants.IssueAssignmentStatus;
-import com.dopaminelite.dl_issues_and_chat_service.constants.IssueStatus;
 import com.dopaminelite.dl_issues_and_chat_service.dto.*;
 import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
 import com.dopaminelite.dl_issues_and_chat_service.service.IssueService;
@@ -30,28 +28,38 @@ public class IssueController {
 
     @GetMapping
     public ResponseEntity<Page<IssueResponse>> listIssues(
-            @RequestParam(required = false) UUID studentId,
-            @RequestParam(required = false) IssueStatus status,
-            @RequestParam(required = false) IssueAssignmentStatus assignmentStatus,
-            @RequestParam(required = false) UUID assignedAdminId,
+            @Valid IssueFilterRequest filter,
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "10") int limit
     ) {
         PageRequest pageable = PageRequest.of(offset, limit);
-        Page<Issue> issues;
 
-        if (studentId != null) {
-            issues = issueService.getIssuesByStudent(studentId, pageable);
-        }
-        else if (status == null && assignmentStatus == null && assignedAdminId == null) {
-            issues = issueService.getAllIssues(pageable);
-        }
-        else {
-            issues = issueService.getIssuesByAdminFilters(status, assignmentStatus, assignedAdminId, pageable);
-        }
+        Page<Issue> issues = resolveFilterQuery(filter, pageable);
 
         Page<IssueResponse> response = issues.map(IssueResponse::fromDomain);
         return ResponseEntity.ok(response);
+    }
+
+    private Page<Issue> resolveFilterQuery(IssueFilterRequest filter, PageRequest pageable) {
+        if (filter.getStudentId() != null) {
+            return issueService.getIssuesByStudent(filter.getStudentId(), pageable);
+        }
+
+        boolean noAdminFilters =
+                filter.getStatus() == null &&
+                        filter.getAssignmentStatus() == null &&
+                        filter.getAssignedAdminId() == null;
+
+        if (noAdminFilters) {
+            return issueService.getAllIssues(pageable);
+        }
+
+        return issueService.getIssuesByAdminFilters(
+                filter.getStatus(),
+                filter.getAssignmentStatus(),
+                filter.getAssignedAdminId(),
+                pageable
+        );
     }
 
     @GetMapping("/{issueId}")
