@@ -11,6 +11,7 @@ import com.dopaminelite.dl_issues_and_chat_service.repository.IssueMessageReposi
 import com.dopaminelite.dl_issues_and_chat_service.repository.IssueRepository;
 import com.dopaminelite.dl_issues_and_chat_service.utils.PdfGenerator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -22,12 +23,16 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class IssueService {
 
     private final IssueRepository issueRepository;
     private final IssueMessageRepository issueMessageRepository;
 
     public Issue createIssue(IssueCreateRequest request) {
+        log.debug("Creating issue for studentId: {}", request.getStudentId());
+        Instant now = Instant.now();
+
         Issue issue = new Issue();
         issue.setStudentId(request.getStudentId());
         issue.setTitle(request.getTitle());
@@ -35,17 +40,21 @@ public class IssueService {
         issue.setStatus(IssueStatus.OPEN);
         issue.setAssignmentStatus(IssueAssignmentStatus.UNASSIGNED);
         issue.setChatReadOnly(false);
-        Instant now = Instant.now();
         issue.setCreatedAt(now);
         issue.setUpdatedAt(now);
-        return issueRepository.save(issue);
+
+        Issue saved = issueRepository.save(issue);
+        log.debug("Created issue with id: {}", saved.getId());
+        return saved;
     }
 
     public Page<Issue> getAllIssues(Pageable pageable) {
+        log.debug("Fetching all issues with pageable: {}", pageable);
         return issueRepository.findAll(pageable);
     }
 
     public Page<Issue> getIssuesByStudent(UUID studentId, Pageable pageable) {
+        log.debug("Fetching issues for studentId: {}, pageable: {}", studentId, pageable);
         return issueRepository.findByStudentId(studentId, pageable);
     }
 
@@ -53,6 +62,9 @@ public class IssueService {
                                                IssueAssignmentStatus assignmentStatus,
                                                UUID assignedAdminId,
                                                Pageable pageable) {
+        log.debug("Fetching issues by admin filters: status: {}, assignmentStatus: {}, assignedAdminId: {}, pageable: {}",
+                status, assignmentStatus, assignedAdminId, pageable);
+
         if (assignedAdminId != null && assignmentStatus == null && status == null) {
             return issueRepository.findByAssignedAdminId(assignedAdminId, pageable);
         }
@@ -61,30 +73,48 @@ public class IssueService {
             status = IssueStatus.OPEN;
             return issueRepository.findByStatusAndAssignmentStatus(status, assignmentStatus, pageable);
         }
-        return issueRepository.findByStatusAndAssignmentStatusAndAssignedAdminId(status, assignmentStatus,
-                assignedAdminId, pageable);
+        return issueRepository.findByStatusAndAssignmentStatusAndAssignedAdminId(
+                status, assignmentStatus, assignedAdminId, pageable);
     }
 
     public Optional<Issue> getIssueById(UUID issueId) {
+        log.debug("Fetching issue by id: {}", issueId);
         return issueRepository.findById(issueId);
     }
 
     public Issue assignIssue(UUID issueId, IssueAssignRequest request) {
+        log.debug("Assigning issueId: {} to adminId: {}", issueId, request.getAdminId());
         Issue issue = issueRepository.findById(issueId)
-                .orElseThrow(() -> new RuntimeException("Issue not found"));
+                .orElseThrow(() -> {
+                    log.error("Issue not found for id: {}", issueId);
+                    return new RuntimeException("Issue not found");
+                });
+
         issue.setAssignedAdminId(request.getAdminId());
         issue.setAssignmentStatus(IssueAssignmentStatus.ASSIGNED);
         issue.setUpdatedAt(Instant.now());
-        return issueRepository.save(issue);
+
+        Issue saved = issueRepository.save(issue);
+        log.debug("Assigned issueId: {} to adminId: {}", saved.getId(), saved.getAssignedAdminId());
+        return saved;
     }
 
     public Issue updateIssueStatus(UUID issueId, IssueUpdateStatusRequest request) {
+        log.debug("Updating status of issueId: {} to {}", issueId, request.getStatus());
         Issue issue = issueRepository.findById(issueId)
-                .orElseThrow(() -> new RuntimeException("Issue not found"));
+                .orElseThrow(() -> {
+                    log.error("Issue not found for id: {}", issueId);
+                    return new RuntimeException("Issue not found");
+                });
+
         IssueStatus newStatus = request.getStatus();
 
-        // Validate status transition
-        validateStatusTransition(issue.getStatus(), newStatus);
+        try {
+            validateStatusTransition(issue.getStatus(), newStatus);
+        } catch (RuntimeException e) {
+            log.error("Invalid status transition for issueId: {}: {} → {}", issueId, issue.getStatus(), newStatus, e);
+            throw e;
+        }
 
         issue.setStatus(newStatus);
         if (newStatus == IssueStatus.SOLVED) {
@@ -92,7 +122,10 @@ public class IssueService {
             issue.setSolvedAt(Instant.now());
         }
         issue.setUpdatedAt(Instant.now());
-        return issueRepository.save(issue);
+
+        Issue saved = issueRepository.save(issue);
+        log.debug("Updated issueId: {} status to {}", saved.getId(), saved.getStatus());
+        return saved;
     }
 
     private void validateStatusTransition(IssueStatus current, IssueStatus next) {
@@ -112,20 +145,26 @@ public class IssueService {
     }
 
     public Page<IssueMessage> getMessagesByIssueId(UUID issueId, Pageable pageable) {
+        log.debug("Fetching messages for issueId: {} with pageable: {}", issueId, pageable);
         return issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(issueId, pageable);
     }
 
     public byte[] generateIssueReport(UUID issueId) {
+        log.debug("Generating PDF report for issueId: {}", issueId);
         Issue issue = issueRepository.findById(issueId)
-                .orElseThrow(() -> new IllegalStateException("Issue not found"));
+                .orElseThrow(() -> {
+                    log.error("Issue not found for report generation, id: {}", issueId);
+                    return new IllegalStateException("Issue not found");
+                });
 
-        // Business rule: only allow report if issue is SOLVED
         if (issue.getStatus() != IssueStatus.SOLVED) {
+            log.error("Cannot generate report for issueId: {} because status is {}", issueId, issue.getStatus());
             throw new IllegalStateException("Report cannot be generated unless issue is SOLVED");
         }
 
         List<IssueMessage> messages = issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(issueId);
 
+        log.debug("Generating PDF with {} messages for issueId: {}", messages.size(), issueId);
         return PdfGenerator.generateIssueReport(issue, messages);
     }
 }

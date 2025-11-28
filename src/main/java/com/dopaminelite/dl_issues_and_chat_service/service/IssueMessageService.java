@@ -27,8 +27,11 @@ public class IssueMessageService {
                                       UUID senderId,
                                       String senderRole) {
         if (issueId == null) {
+            log.error("Attempted to create message with null issueId");
             throw new IllegalArgumentException("issueId is required");
         }
+
+        log.debug("Creating message for issueId: {}, senderId: {}, senderRole: {}", issueId, senderId, senderRole);
 
         // Fallback sender id & role if authentication is not present
         UUID resolvedSenderId = senderId != null ? senderId : UUID.randomUUID();
@@ -36,6 +39,7 @@ public class IssueMessageService {
         try {
             resolvedRole = senderRole != null ? Role.valueOf(senderRole) : Role.STUDENT;
         } catch (Exception ex) {
+            log.warn("Invalid senderRole='{}', defaulting to STUDENT", senderRole);
             resolvedRole = Role.STUDENT;
         }
 
@@ -52,22 +56,29 @@ public class IssueMessageService {
                 .build();
 
         IssueMessage saved = issueMessageRepository.save(msg);
-        log.debug("Saved IssueMessage id={} for issueId={}", saved.getId(), issueId);
+        log.debug("Saved IssueMessage id: {} for issueId: {}", saved.getId(), issueId);
         return saved;
     }
 
     public IssueMessage createMessage(UUID issueId,
                                       String content,
                                       List<UploadedFileRef> attachments) {
+        log.debug("Creating message for issueId: {} without explicit sender", issueId);
         return createMessage(issueId, content, attachments, null, null);
     }
 
     public IssueMessageListResponse listMessages(UUID issueId, int offset, int limit) {
         if (issueId == null) {
+            log.error("Attempted to list messages with null issueId");
             throw new IllegalArgumentException("issueId is required");
         }
+
+        log.debug("Listing messages for issueId: {}, offset: {}, limit: {}", issueId, offset, limit);
+
         PageRequest pageRequest = PageRequest.of(Math.max(0, offset), Math.max(1, limit));
         var page = issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(issueId, pageRequest);
+
+        log.debug("Fetched {} messages for issueId: {}", page.getNumberOfElements(), issueId);
 
         return IssueMessageListResponse.builder()
                 .items(page.getContent())

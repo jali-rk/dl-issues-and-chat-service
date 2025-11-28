@@ -25,8 +25,9 @@ public class IssueWebSocketController {
     private final SimpMessagingTemplate messagingTemplate;
     private final IssueMessageService messageService;
 
-    // Convenience overload used by unit tests and non-Spring invocation
     public void sendMessage(UUID issueId, WebSocketSendMessagePayload payload) {
+        log.debug("Processing internal sendMessage for issueId: {}", issueId);
+
         try {
             IssueMessage msg = messageService.createMessage(issueId, payload.getContent(), payload.getAttachments());
 
@@ -39,8 +40,10 @@ public class IssueWebSocketController {
                     .build();
 
             messagingTemplate.convertAndSend("/topic/issues/" + issueId, envelope);
+            log.debug("WebSocket message sent to /topic/issues/{}", issueId);
+
         } catch (Exception e) {
-            log.error("Failed to process sendMessage invocation for issueId={}", issueId, e);
+            log.error("Failed to process internal sendMessage for issueId: {}", issueId, e);
         }
     }
 
@@ -50,11 +53,13 @@ public class IssueWebSocketController {
             @Payload WebSocketSendMessagePayload payload,
             SimpMessageHeaderAccessor headerAccessor
     ) {
+        log.debug("WebSocket message received for issueId: {}, payload: {}", issueId, payload);
+
         UUID parsedIssueId;
         try {
             parsedIssueId = UUID.fromString(issueId);
         } catch (IllegalArgumentException ex) {
-            log.error("Invalid issueId path variable: {}", issueId, ex);
+            log.error("Invalid issueId provided in WebSocket path: {}", issueId, ex);
             return;
         }
 
@@ -65,7 +70,15 @@ public class IssueWebSocketController {
             UUID senderId = possibleSender.map(UUID::fromString).orElse(null);
             String senderRole = possibleRole.orElse(null);
 
-            IssueMessage msg = messageService.createMessage(parsedIssueId, payload.getContent(), payload.getAttachments(), senderId, senderRole);
+            log.debug("Sender info extracted: senderId: {}, senderRole: {}", senderId, senderRole);
+
+            IssueMessage msg = messageService.createMessage(
+                    parsedIssueId,
+                    payload.getContent(),
+                    payload.getAttachments(),
+                    senderId,
+                    senderRole
+            );
 
             WebSocketMessageEventPayload eventPayload = new WebSocketMessageEventPayload(msg);
 
@@ -76,8 +89,10 @@ public class IssueWebSocketController {
                     .build();
 
             messagingTemplate.convertAndSend("/topic/issues/" + parsedIssueId, envelope);
+            log.debug("Broadcasted message to /topic/issues/{}", parsedIssueId);
+
         } catch (Exception e) {
-            log.error("Failed to process websocket send for issueId: {}", issueId, e);
+            log.error("Failed to process WebSocket message for issueId: {}", issueId, e);
         }
     }
 }
