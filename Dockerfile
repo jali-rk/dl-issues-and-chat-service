@@ -1,4 +1,4 @@
-FROM amazoncorretto:21-alpine-jdk AS builder
+FROM eclipse-temurin:21-jdk-alpine AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ COPY src ./src
 
 RUN ./gradlew clean bootJar
 
-FROM amazoncorretto:21-alpine-jre
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
