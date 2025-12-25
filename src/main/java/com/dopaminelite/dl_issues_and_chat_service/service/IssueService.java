@@ -7,6 +7,7 @@ import com.dopaminelite.dl_issues_and_chat_service.dto.IssueCreateRequest;
 import com.dopaminelite.dl_issues_and_chat_service.dto.IssueUpdateStatusRequest;
 import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
 import com.dopaminelite.dl_issues_and_chat_service.entity.IssueMessage;
+import com.dopaminelite.dl_issues_and_chat_service.entity.IssueNumberGenerator;
 import com.dopaminelite.dl_issues_and_chat_service.repository.IssueMessageRepository;
 import com.dopaminelite.dl_issues_and_chat_service.repository.IssueRepository;
 import com.dopaminelite.dl_issues_and_chat_service.utils.PdfGenerator;
@@ -28,6 +29,7 @@ public class IssueService {
 
     private final IssueRepository issueRepository;
     private final IssueMessageRepository issueMessageRepository;
+    private final IssueNumberGenerator issueNumberGenerator;
 
     public Issue createIssue(IssueCreateRequest request) {
         log.debug("Creating issue for studentId: {}", request.getStudentId());
@@ -42,6 +44,7 @@ public class IssueService {
         issue.setChatReadOnly(false);
         issue.setCreatedAt(now);
         issue.setUpdatedAt(now);
+        issue.setIssueNumber(issueNumberGenerator.next());
 
         Issue saved = issueRepository.save(issue);
         log.debug("Created issue with id: {}", saved.getId());

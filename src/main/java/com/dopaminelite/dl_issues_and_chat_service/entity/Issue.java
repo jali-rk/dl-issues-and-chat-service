@@ -34,7 +34,7 @@ public class Issue {
     @GeneratedValue
     private UUID id;
 
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(unique = true, updatable = false)
     private Long issueNumber;
 
     @Column(nullable = false)
