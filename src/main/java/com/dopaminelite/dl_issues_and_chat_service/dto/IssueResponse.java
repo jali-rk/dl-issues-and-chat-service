@@ -16,6 +16,7 @@ import java.util.UUID;
 public class IssueResponse {
 
     private UUID id;
+    private Long issueNumber;
     private String title;
     private String description;
     private UUID studentId;
