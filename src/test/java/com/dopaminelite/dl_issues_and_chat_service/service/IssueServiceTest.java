@@ -6,6 +6,7 @@ import com.dopaminelite.dl_issues_and_chat_service.constants.IssueStatus;
 import com.dopaminelite.dl_issues_and_chat_service.dto.IssueCreateRequest;
 import com.dopaminelite.dl_issues_and_chat_service.dto.IssueUpdateStatusRequest;
 import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
+import com.dopaminelite.dl_issues_and_chat_service.entity.IssueNumberGenerator;
 import com.dopaminelite.dl_issues_and_chat_service.repository.IssueRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,9 @@ class IssueServiceTest {
 
     @Mock
     private IssueRepository issueRepository;
+
+    @Mock
+    private IssueNumberGenerator issueNumberGenerator;
 
     @InjectMocks
     private IssueService issueService;
@@ -61,6 +65,7 @@ class IssueServiceTest {
 
         Issue saved = Issue.builder()
                 .id(UUID.randomUUID())
+                .issueNumber(issueNumberGenerator.next())
                 .studentId(req.getStudentId())
                 .title(req.getTitle())
                 .description(req.getDescription())
