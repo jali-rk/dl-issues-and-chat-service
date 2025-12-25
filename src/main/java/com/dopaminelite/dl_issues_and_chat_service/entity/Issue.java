@@ -34,7 +34,7 @@ public class Issue {
     @GeneratedValue
     private UUID id;
 
-    @Column(unique = true, updatable = false)
+    @Column(name = "issue_number", updatable = false, unique = true, nullable = false)
     private Long issueNumber;
 
     @Column(nullable = false)

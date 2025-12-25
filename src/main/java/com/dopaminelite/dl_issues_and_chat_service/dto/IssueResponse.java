@@ -33,6 +33,7 @@ public class IssueResponse {
     public static IssueResponse fromDomain(Issue issue) {
         IssueResponse r = new IssueResponse();
         r.id = issue.getId();
+        r.issueNumber = issue.getIssueNumber();
         r.title = issue.getTitle();
         r.description = issue.getDescription();
         r.studentId = issue.getStudentId();
