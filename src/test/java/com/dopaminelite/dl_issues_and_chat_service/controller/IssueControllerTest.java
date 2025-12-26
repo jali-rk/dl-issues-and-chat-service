@@ -152,6 +152,10 @@ public class IssueControllerTest {
         Mockito.when(issueService.getIssuesByStudent(eq(studentId), any()))
                 .thenReturn(new PageImpl<>(List.of(issue)));
 
+        // New mock: controller now calls the overload getIssuesByStudent(UUID, IssueStatus, Pageable)
+        Mockito.when(issueService.getIssuesByStudent(eq(studentId), Mockito.isNull(IssueStatus.class), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(issue)));
+
         mockMvc.perform(get("/issues").param("studentId", studentId.toString()).param("offset", "0").param("limit", "10")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
