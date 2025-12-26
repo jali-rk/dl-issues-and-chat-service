@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -37,7 +38,8 @@ public class IssueController {
     ) {
         log.debug("Listing issues with filters: {}, offset: {}, limit: {}", filter, offset, limit);
 
-        PageRequest pageable = PageRequest.of(offset, limit);
+        // Default sort: createdAt DESC
+        PageRequest pageable = PageRequest.of(offset, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Issue> issues = resolveFilterQuery(filter, pageable);
         Page<IssueResponse> response = issues.map(IssueResponse::fromDomain);
 
