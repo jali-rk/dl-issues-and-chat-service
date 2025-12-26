@@ -61,6 +61,14 @@ public class IssueService {
         return issueRepository.findByStudentId(studentId, pageable);
     }
 
+    public Page<Issue> getIssuesByStudent(UUID studentId, IssueStatus status, Pageable pageable) {
+        log.debug("Fetching issues for studentId: {} with optional status: {} pageable: {}", studentId, status, pageable);
+        if (status != null) {
+            return issueRepository.findByStudentIdAndStatus(studentId, status, pageable);
+        }
+        return issueRepository.findByStudentId(studentId, pageable);
+    }
+
     public Page<Issue> getIssuesByAdminFilters(IssueStatus status,
                                                IssueAssignmentStatus assignmentStatus,
                                                UUID assignedAdminId,

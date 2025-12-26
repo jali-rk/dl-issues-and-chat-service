@@ -46,8 +46,9 @@ public class IssueController {
 
     private Page<Issue> resolveFilterQuery(IssueFilterRequest filter, PageRequest pageable) {
         if (filter.getStudentId() != null) {
-            log.debug("Fetching issues for studentId: {}", filter.getStudentId());
-            return issueService.getIssuesByStudent(filter.getStudentId(), pageable);
+            log.debug("Fetching issues for studentId: {} with optional status: {}", filter.getStudentId(), filter.getStatus());
+            // Use the overloaded service method that accepts an optional status
+            return issueService.getIssuesByStudent(filter.getStudentId(), filter.getStatus(), pageable);
         }
 
         boolean noAdminFilters =

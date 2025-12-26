@@ -41,4 +41,7 @@ public interface IssueRepository extends JpaRepository<Issue, UUID> {
 
     Page<Issue> findByAssignedAdminIdAndAssignmentStatus(UUID assignedAdminId, IssueAssignmentStatus assignmentStatus, Pageable pageable);
 
+    // Support student + status filtering
+    Page<Issue> findByStudentIdAndStatus(UUID studentId, IssueStatus status, Pageable pageable);
+
 }
