@@ -32,4 +32,13 @@ public interface IssueRepository extends JpaRepository<Issue, UUID> {
             Pageable pageable
     );
 
+    // Newly added query methods to support more flexible filtering
+    Page<Issue> findByStatus(IssueStatus status, Pageable pageable);
+
+    Page<Issue> findByAssignmentStatus(IssueAssignmentStatus assignmentStatus, Pageable pageable);
+
+    Page<Issue> findByAssignedAdminIdAndStatus(UUID assignedAdminId, IssueStatus status, Pageable pageable);
+
+    Page<Issue> findByAssignedAdminIdAndAssignmentStatus(UUID assignedAdminId, IssueAssignmentStatus assignmentStatus, Pageable pageable);
+
 }

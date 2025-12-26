@@ -68,16 +68,43 @@ public class IssueService {
         log.debug("Fetching issues by admin filters: status: {}, assignmentStatus: {}, assignedAdminId: {}, pageable: {}",
                 status, assignmentStatus, assignedAdminId, pageable);
 
+        // If client supplied only assignedAdminId (no other filters)
         if (assignedAdminId != null && assignmentStatus == null && status == null) {
             return issueRepository.findByAssignedAdminId(assignedAdminId, pageable);
         }
+
+        // No assigned admin provided -> handle status/assignment combinations across all admins
         if (assignedAdminId == null) {
-            assignmentStatus = IssueAssignmentStatus.UNASSIGNED;
-            status = IssueStatus.OPEN;
-            return issueRepository.findByStatusAndAssignmentStatus(status, assignmentStatus, pageable);
+            if (status != null && assignmentStatus == null) {
+                // status only
+                return issueRepository.findByStatus(status, pageable);
+            }
+            if (status == null && assignmentStatus != null) {
+                // assignment status only
+                return issueRepository.findByAssignmentStatus(assignmentStatus, pageable);
+            }
+            if (status != null) {
+                // both status and assignmentStatus provided
+                return issueRepository.findByStatusAndAssignmentStatus(status, assignmentStatus, pageable);
+            }
+            // fallback - should be handled earlier, but return all
+            return issueRepository.findAll(pageable);
         }
-        return issueRepository.findByStatusAndAssignmentStatusAndAssignedAdminId(
-                status, assignmentStatus, assignedAdminId, pageable);
+
+        // assignedAdminId != null: handle combinations that include assigned admin
+        if (assignedAdminId != null) {
+            if (status != null && assignmentStatus == null) {
+                return issueRepository.findByAssignedAdminIdAndStatus(assignedAdminId, status, pageable);
+            }
+            if (status == null && assignmentStatus != null) {
+                return issueRepository.findByAssignedAdminIdAndAssignmentStatus(assignedAdminId, assignmentStatus, pageable);
+            }
+            // all three provided
+            return issueRepository.findByStatusAndAssignmentStatusAndAssignedAdminId(status, assignmentStatus, assignedAdminId, pageable);
+        }
+
+        // default: return all
+        return issueRepository.findAll(pageable);
     }
 
     public Optional<Issue> getIssueById(UUID issueId) {
