@@ -5,6 +5,8 @@ import com.dopaminelite.dl_issues_and_chat_service.constants.IssueStatus;
 import com.dopaminelite.dl_issues_and_chat_service.dto.IssueAssignRequest;
 import com.dopaminelite.dl_issues_and_chat_service.dto.IssueCreateRequest;
 import com.dopaminelite.dl_issues_and_chat_service.dto.IssueUpdateStatusRequest;
+import com.dopaminelite.dl_issues_and_chat_service.dto.UserInfo;
+import com.dopaminelite.dl_issues_and_chat_service.client.UserServiceClient;
 import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
 import com.dopaminelite.dl_issues_and_chat_service.entity.IssueMessage;
 import com.dopaminelite.dl_issues_and_chat_service.entity.IssueNumberGenerator;
@@ -19,8 +21,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +35,7 @@ public class IssueService {
     private final IssueRepository issueRepository;
     private final IssueMessageRepository issueMessageRepository;
     private final IssueNumberGenerator issueNumberGenerator;
+    private final UserServiceClient userServiceClient;
 
     public Issue createIssue(IssueCreateRequest request) {
         log.debug("Creating issue for studentId: {}", request.getStudentId());
@@ -202,7 +208,27 @@ public class IssueService {
 
         List<IssueMessage> messages = issueMessageRepository.findByIssueIdOrderByCreatedAtAsc(issueId);
 
+        // Collect all unique user IDs from the issue and messages
+        List<UUID> userIds = Stream.concat(
+                Stream.of(issue.getStudentId(), issue.getAssignedAdminId()),
+                messages.stream().map(IssueMessage::getSenderId)
+        ).filter(id -> id != null).distinct().collect(Collectors.toList());
+
+        log.info("Collected user IDs for PDF generation: studentId={}, assignedAdminId={}, total unique IDs={}",
+                issue.getStudentId(), issue.getAssignedAdminId(), userIds.size());
+        log.info("User IDs to fetch: {}", userIds);
+
+        // Fetch user details
+        Map<UUID, UserInfo> userMap = userServiceClient.fetchUsersByIds(userIds);
+
+        log.info("User map returned {} entries", userMap.size());
+        if (issue.getAssignedAdminId() != null) {
+            UserInfo adminInfo = userMap.get(issue.getAssignedAdminId());
+            log.info("Assigned admin {} info in map: {}", issue.getAssignedAdminId(),
+                    adminInfo != null ? adminInfo.getFullName() : "NOT FOUND");
+        }
+
         log.debug("Generating PDF with {} messages for issueId: {}", messages.size(), issueId);
-        return PdfGenerator.generateIssueReport(issue, messages);
+        return PdfGenerator.generateIssueReport(issue, messages, userMap);
     }
 }
