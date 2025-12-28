@@ -1,500 +1,321 @@
 package com.dopaminelite.dl_issues_and_chat_service.utils;
 
-import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
-import com.dopaminelite.dl_issues_and_chat_service.entity.IssueMessage;
 import com.dopaminelite.dl_issues_and_chat_service.constants.Role;
 import com.dopaminelite.dl_issues_and_chat_service.dto.UserInfo;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.common.PDRectangle;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.PDType0Font;
-import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import com.dopaminelite.dl_issues_and_chat_service.entity.Issue;
+import com.dopaminelite.dl_issues_and_chat_service.entity.IssueMessage;
+
+import com.itextpdf.io.font.PdfEncodings;
+import com.itextpdf.kernel.font.PdfFont;
+import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.geom.PageSize;
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.element.Text;
+import com.itextpdf.layout.properties.HorizontalAlignment;
+import com.itextpdf.layout.properties.TextAlignment;
+import com.itextpdf.layout.properties.UnitValue;
+import com.itextpdf.kernel.events.Event;
+import com.itextpdf.kernel.events.IEventHandler;
+import com.itextpdf.kernel.events.PdfDocumentEvent;
+import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
+
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 public class PdfGenerator {
 
     private static final float MARGIN = 50f;
-    private static final float LEADING = 14f;
-    private static final float FONT_SIZE = 12f;
     private static final float TITLE_FONT_SIZE = 14f;
     private static final float DETAILS_FONT_SIZE = 11f;
     private static final float MESSAGE_META_FONT_SIZE = 9f;
     private static final float MESSAGE_BODY_FONT_SIZE = 12f;
     private static final float HEADER_FOOTER_FONT_SIZE = 10f;
-    private static final float MESSAGE_GAP = 8f;
     private static final float DATE_HEADER_FONT_SIZE = 11f;
-    private static final float DATE_HEADER_GAP = 12f;
+
     private static final DateTimeFormatter READABLE_DATE_FORMAT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm:ss").withZone(ZoneId.systemDefault());
+            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm:ss")
+                    .withZone(ZoneId.systemDefault());
+
     private static final DateTimeFormatter MESSAGE_TIME_FORMAT =
-            DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
+            DateTimeFormatter.ofPattern("HH:mm")
+                    .withZone(ZoneId.systemDefault());
+
     private static final DateTimeFormatter DATE_HEADER_FORMAT =
-            DateTimeFormatter.ofPattern("dd MMMM yyyy").withZone(ZoneId.systemDefault());
+            DateTimeFormatter.ofPattern("dd MMMM yyyy")
+                    .withZone(ZoneId.systemDefault());
 
-    public static byte[] generateIssueReport(Issue issue, List<IssueMessage> messages, Map<UUID, UserInfo> userMap) {
+    public static byte[] generateIssueReport(
+            Issue issue,
+            List<IssueMessage> messages,
+            Map<UUID, UserInfo> userMap
+    ) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            PdfWriter writer = new PdfWriter(baos);
+            PdfDocument pdf = new PdfDocument(writer);
+            Document doc = new Document(pdf, PageSize.A4);
+            doc.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-        try (PDDocument doc = new PDDocument(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            // Load fonts (EMBEDDED, UNICODE)
+            PdfFont latinRegular = loadFont("fonts/NotoSans-Regular.ttf");
+            PdfFont latinBold = loadFont("fonts/NotoSans-Bold.ttf");
+            PdfFont sinhalaRegular = loadFont("fonts/NotoSansSinhala-Regular.ttf");
+            PdfFont sinhalaBold = loadFont("fonts/NotoSansSinhala-Bold.ttf");
 
-            // Load Noto Sans font which supports Unicode (including Sinhala)
-            PDFont regularFont;
-            PDFont headerFont;
-            boolean unicodeFontsLoaded = false;
+            // Register footer event handler
+            pdf.addEventHandler(PdfDocumentEvent.END_PAGE, new FooterHandler(latinRegular));
 
-            try {
-                // Use Noto Sans which has full Unicode support including Sinhala
-                InputStream fontStream = PdfGenerator.class.getResourceAsStream("/fonts/NotoSans-Regular.ttf");
-                if (fontStream != null) {
-                    regularFont = PDType0Font.load(doc, fontStream);
-                    log.info("Successfully loaded NotoSans-Regular font");
-                } else {
-                    log.warn("NotoSans-Regular.ttf not found in resources");
-                    regularFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-                }
+            // Header
+            doc.add(new Paragraph("DopamineLite")
+                    .setFont(latinBold)
+                    .setFontSize(HEADER_FOOTER_FONT_SIZE)
+                    .setTextAlignment(TextAlignment.CENTER));
 
-                InputStream boldFontStream = PdfGenerator.class.getResourceAsStream("/fonts/NotoSans-Bold.ttf");
-                if (boldFontStream != null) {
-                    headerFont = PDType0Font.load(doc, boldFontStream);
-                    log.info("Successfully loaded NotoSans-Bold font");
-                } else {
-                    log.warn("NotoSans-Bold.ttf not found in resources");
-                    headerFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-                }
+            // Title
+            doc.add(new Paragraph("Issue Report - Issue No. : " + issue.getIssueNumber())
+                    .setFont(latinBold)
+                    .setFontSize(TITLE_FONT_SIZE)
+                    .setMultipliedLeading(0.5f));  // reduced line spacing
 
-                // Check if both fonts are Unicode fonts
-                unicodeFontsLoaded = (regularFont instanceof PDType0Font) && (headerFont instanceof PDType0Font);
-                log.info("Unicode fonts loaded: {}", unicodeFontsLoaded);
-            } catch (Exception e) {
-                log.error("Failed to load Sinhala fonts, falling back to Helvetica: {}", e.getMessage());
-                // Fallback to basic fonts if Unicode fonts aren't available
-                regularFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
-                headerFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-                unicodeFontsLoaded = false;
-            }
+// Details
+            doc.add(new Paragraph("Issue ID: " + issue.getId())
+                    .setFont(latinRegular)
+                    .setFontSize(DETAILS_FONT_SIZE)
+                    .setMultipliedLeading(0.5f));
 
-            final boolean useUnicode = unicodeFontsLoaded;
+            doc.add(mixed(
+                    "Title: " + safe(issue.getTitle()),
+                    latinRegular, sinhalaRegular,
+                    DETAILS_FONT_SIZE, TextAlignment.LEFT
+            ).setMultipliedLeading(0.5f));
 
-            PDPage page = new PDPage(PDRectangle.LETTER);
-            doc.addPage(page);
+            doc.add(mixed(
+                    "Description: " + safe(issue.getDescription()),
+                    latinRegular, sinhalaRegular,
+                    DETAILS_FONT_SIZE, TextAlignment.LEFT
+            ).setMultipliedLeading(0.5f));
 
-            float pageWidth = page.getMediaBox().getWidth();
-            float pageHeight = page.getMediaBox().getHeight();
-            float maxTextWidth = pageWidth - 2 * MARGIN;
+            doc.add(new Paragraph("Status: " + issue.getStatus())
+                    .setFont(latinRegular)
+                    .setFontSize(DETAILS_FONT_SIZE)
+                    .setMultipliedLeading(0.5f));
 
-            PDPageContentStream cs = new PDPageContentStream(doc, page);
-
-            // Draw header
-            drawHeader(cs, pageWidth, pageHeight, headerFont);
-
-            float curY = pageHeight - MARGIN - 30; // Start below header
-
-            // Issue title
-            String titleText = String.format("Issue Report - Issue No. : %d", issue.getIssueNumber());
-            curY = writeLine(cs, sanitize(titleText, useUnicode), curY, headerFont, TITLE_FONT_SIZE, maxTextWidth, headerFont);
-
-            // Issue details
-            curY = writeLine(cs, sanitize("Issue ID: " + issue.getId(), useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
-            curY = writeLine(cs, sanitize("Title: " + issue.getTitle(), useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
-            curY = writeLine(cs, sanitize("Description: " + issue.getDescription(), useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
-            curY = writeLine(cs, "Status: " + issue.getStatus(), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
-
-            // Display assigned admin's name
+// Assigned admin
             String assignedAdminName = "Not Assigned";
             if (issue.getAssignedAdminId() != null) {
                 UserInfo adminInfo = userMap.get(issue.getAssignedAdminId());
-                if (adminInfo != null && adminInfo.getFullName() != null && !adminInfo.getFullName().isEmpty()) {
+                if (adminInfo != null && adminInfo.getFullName() != null) {
                     assignedAdminName = adminInfo.getFullName();
-                } else {
-                    assignedAdminName = issue.getAssignedAdminId().toString();
                 }
             }
-            curY = writeLine(cs, sanitize("Assigned Admin: " + assignedAdminName, useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
 
-            curY = writeLine(cs, "Created At: " + READABLE_DATE_FORMAT.format(issue.getCreatedAt()), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
-            curY = writeLine(cs, "Solved At: " + (issue.getSolvedAt() != null ? READABLE_DATE_FORMAT.format(issue.getSolvedAt()) : "N/A"), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
+            doc.add(mixed(
+                    "Assigned Admin: " + assignedAdminName,
+                    latinRegular, sinhalaRegular,
+                    DETAILS_FONT_SIZE, TextAlignment.LEFT
+            ).setMultipliedLeading(0.5f));
 
-            curY -= LEADING; // blank line
-            curY = writeLine(cs, sanitize("Conversation:", useUnicode), curY, headerFont, FONT_SIZE, maxTextWidth, headerFont);
-            curY -= LEADING / 2;
+            doc.add(new Paragraph("Created At: " +
+                    READABLE_DATE_FORMAT.format(issue.getCreatedAt()))
+                    .setFont(latinRegular)
+                    .setFontSize(DETAILS_FONT_SIZE)
+                    .setMultipliedLeading(0.5f));
+
+            doc.add(new Paragraph("Solved At: " +
+                    (issue.getSolvedAt() != null
+                            ? READABLE_DATE_FORMAT.format(issue.getSolvedAt())
+                            : "N/A"))
+                    .setFont(latinRegular)
+                    .setFontSize(DETAILS_FONT_SIZE)
+                    .setMultipliedLeading(0.5f));
+
+            // Conversation
+            doc.add(new Paragraph("Conversation:")
+                    .setFont(latinBold)
+                    .setFontSize(DETAILS_FONT_SIZE));
 
             // Group messages by date
-            Map<LocalDate, List<IssueMessage>> messagesByDate = new LinkedHashMap<>();
+            Map<LocalDate, List<IssueMessage>> grouped = new LinkedHashMap<>();
             for (IssueMessage m : messages) {
-                if (m.getCreatedAt() != null) {
-                    LocalDate date = m.getCreatedAt().atZone(ZoneId.systemDefault()).toLocalDate();
-                    messagesByDate.computeIfAbsent(date, k -> new ArrayList<>()).add(m);
+                LocalDate d = m.getCreatedAt()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDate();
+                grouped.computeIfAbsent(d, k -> new ArrayList<>()).add(m);
+            }
+
+            for (var entry : grouped.entrySet()) {
+                doc.add(new Paragraph(DATE_HEADER_FORMAT.format(entry.getKey()))
+                        .setFont(latinRegular)
+                        .setFontSize(DATE_HEADER_FONT_SIZE)
+                        .setTextAlignment(TextAlignment.CENTER));
+
+                for (IssueMessage m : entry.getValue()) {
+                    String meta = String.format(
+                            "%s | %s | [%s]",
+                            getUserName(m.getSenderId(), userMap),
+                            MESSAGE_TIME_FORMAT.format(m.getCreatedAt()),
+                            formatRoleLabel(m.getSenderRole())
+                    );
+
+                    // Determine alignment based on role
+                    boolean isAdminSide = (m.getSenderRole() == Role.ADMIN || m.getSenderRole() == Role.MAIN_ADMIN);
+                    TextAlignment alignment = isAdminSide ? TextAlignment.RIGHT : TextAlignment.LEFT;
+                    HorizontalAlignment hAlign = isAdminSide ? HorizontalAlignment.RIGHT : HorizontalAlignment.LEFT;
+
+                    // Meta line with constrained width
+                    Paragraph metaPara = mixed(
+                            meta,
+                            latinRegular, sinhalaRegular,
+                            MESSAGE_META_FONT_SIZE, alignment
+                    );
+                    metaPara.setWidth(UnitValue.createPercentValue(85));
+                    metaPara.setHorizontalAlignment(hAlign);
+                    // Disable line splitting/wrapping (best-effort)
+                    metaPara.setKeepTogether(true);
+                    doc.add(metaPara);
+
+                    // Body with constrained width
+                    String body = safe(m.getContent());
+                    Paragraph bodyPara = mixed(
+                            body,
+                            latinRegular, sinhalaRegular,
+                            MESSAGE_BODY_FONT_SIZE, alignment
+                    );
+                    bodyPara.setWidth(UnitValue.createPercentValue(85));
+                    bodyPara.setHorizontalAlignment(hAlign);
+                    // Disable line splitting/wrapping (best-effort)
+                    bodyPara.setKeepTogether(true);
+                    doc.add(bodyPara);
                 }
             }
 
-            // Messages
-            int pageNumber = 1;
-            for (Map.Entry<LocalDate, List<IssueMessage>> entry : messagesByDate.entrySet()) {
-                LocalDate date = entry.getKey();
-                List<IssueMessage> dayMessages = entry.getValue();
+            // Remove manual footer paragraph
+            // doc.add(new Paragraph("Page " + pdf.getNumberOfPages())
+            //         .setFont(latinRegular)
+            //         .setFontSize(HEADER_FOOTER_FONT_SIZE)
+            //         .setTextAlignment(TextAlignment.CENTER));
 
-                // Check if we need a new page for date header
-                if (curY <= MARGIN + 50) {
-                    drawFooter(cs, pageWidth, regularFont, pageNumber);
-                    cs.close();
-                    pageNumber++;
-                    page = new PDPage(PDRectangle.LETTER);
-                    doc.addPage(page);
-                    cs = new PDPageContentStream(doc, page);
-                    drawHeader(cs, pageWidth, pageHeight, headerFont);
-                    curY = pageHeight - MARGIN - 30;
-                }
-
-                // Draw centered date header
-                String dateStr = DATE_HEADER_FORMAT.format(date);
-                dateStr = sanitizeForFont(dateStr, regularFont);
-                float dateWidth = safeGetStringWidth(dateStr, regularFont, DATE_HEADER_FONT_SIZE);
-                float dateX = (pageWidth - dateWidth) / 2;
-
-                cs.beginText();
-                cs.setFont(regularFont, DATE_HEADER_FONT_SIZE);
-                cs.newLineAtOffset(dateX, curY);
-                cs.showText(dateStr);
-                cs.endText();
-                curY -= DATE_HEADER_GAP;
-
-                // Render messages for this date
-                for (IssueMessage m : dayMessages) {
-                String roleLabel = formatRoleLabel(m.getSenderRole());
-                String userName = getUserName(m.getSenderId(), userMap);
-
-                boolean isAdminSide = m.getSenderRole() == Role.ADMIN || m.getSenderRole() == Role.MAIN_ADMIN;
-
-                // Meta line: Name | Time | Role
-                String meta = String.format("%s | %s | [%s]",
-                         userName,
-                         m.getCreatedAt() != null ? MESSAGE_TIME_FORMAT.format(m.getCreatedAt()) : "",
-                         roleLabel
-                         );
-
-                float bubbleWidth = maxTextWidth * 0.85f;
-                float rightX = pageWidth - MARGIN - bubbleWidth;
-                float baseX = isAdminSide ? rightX : MARGIN;
-
-                // Page break check (rough, based on a minimum space need)
-                if (curY <= MARGIN + 40) {
-                    drawFooter(cs, pageWidth, regularFont, pageNumber);
-                    cs.close();
-                    pageNumber++;
-                    page = new PDPage(PDRectangle.LETTER);
-                    doc.addPage(page);
-                    cs = new PDPageContentStream(doc, page);
-                    drawHeader(cs, pageWidth, pageHeight, headerFont);
-                    curY = pageHeight - MARGIN - 30;
-                }
-
-                // Meta line (smaller, italic-ish)
-                curY = writeAlignedBlock(cs, sanitize(meta, useUnicode), baseX, curY, regularFont, MESSAGE_META_FONT_SIZE, bubbleWidth, isAdminSide, pageWidth, useUnicode);
-
-                // Body lines (normal)
-                String body = m.getContent() != null ? m.getContent() : "";
-                curY = writeAlignedBlock(cs, sanitize(body, useUnicode), baseX, curY, regularFont, MESSAGE_BODY_FONT_SIZE, bubbleWidth, isAdminSide, pageWidth, useUnicode);
-
-                curY -= MESSAGE_GAP;
-                }
-            }
-
-            // Draw footer on last page
-            drawFooter(cs, pageWidth, regularFont, pageNumber);
-            cs.close();
-
-            doc.save(baos);
+            doc.close();
             return baos.toByteArray();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to generate PDF", e);
+
+        } catch (Exception e) {
+            throw new RuntimeException("PDF generation failed", e);
         }
     }
 
-    /**
-     * Clean control characters from text but preserve Unicode characters
-     * Also removes characters that the font cannot encode
-     */
-    private static String sanitize(String s, boolean useUnicode) {
-        if (s == null) return "";
+    // ===== FOOTER HANDLER =====
+    private static class FooterHandler implements IEventHandler {
+        private final PdfFont font;
+        public FooterHandler(PdfFont font) {
+            this.font = font;
+        }
+        @Override
+        public void handleEvent(Event event) {
+            PdfDocumentEvent docEvent = (PdfDocumentEvent) event;
+            PdfDocument pdfDoc = docEvent.getDocument();
+            int pageNumber = pdfDoc.getPageNumber(docEvent.getPage());
+            PdfCanvas canvas = new PdfCanvas(docEvent.getPage());
+            String footer = "Page " + pageNumber;
+            float x = pdfDoc.getDefaultPageSize().getWidth() / 2;
+            float y = MARGIN / 2; // Place at bottom margin
+            canvas.beginText()
+                    .setFontAndSize(font, HEADER_FOOTER_FONT_SIZE)
+                    .moveText(x, y)
+                    .showText(footer)
+                    .endText();
+            canvas.release();
+        }
+    }
 
-        StringBuilder sb = new StringBuilder(s.length());
+    // ===== FONT LOADER =====
+    private static PdfFont loadFont(String resourcePath) throws IOException {
+        try (var is = PdfGenerator.class
+                .getClassLoader()
+                .getResourceAsStream(resourcePath)) {
 
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-
-            // Handle common control characters
-            if (c == '\r' || c == '\n' || c == '\t') {
-                sb.append(' ');
-                continue;
+            if (is == null) {
+                throw new IOException("Font resource not found: " + resourcePath);
             }
 
-            // Skip null and other control characters
-            if (c < 0x20) {
-                continue;
+            byte[] fontBytes = is.readAllBytes();
+
+            return PdfFontFactory.createFont(
+                    fontBytes,
+                    PdfEncodings.IDENTITY_H
+            );
+        }
+    }
+
+
+    // ===== MIXED TEXT (THE IMPORTANT PART) =====
+    private static Paragraph mixed(
+            String text,
+            PdfFont latin,
+            PdfFont sinhala,
+            float size,
+            TextAlignment alignment
+    ) {
+        Paragraph p = new Paragraph()
+                .setFontSize(size)
+                .setTextAlignment(alignment)
+                .setMultipliedLeading(0.75f);;
+
+        if (text == null || text.isEmpty()) return p;
+
+        StringBuilder buf = new StringBuilder();
+        boolean sinhalaRun = isSinhala(text.charAt(0));
+
+        for (char c : text.toCharArray()) {
+            boolean isSinhala = isSinhala(c);
+            if (isSinhala != sinhalaRun) {
+                p.add(new Text(buf.toString())
+                        .setFont(sinhalaRun ? sinhala : latin));
+                buf.setLength(0);
+                sinhalaRun = isSinhala;
             }
-
-            // Keep all Unicode characters (including Sinhala, Arabic, Chinese, etc.) if Unicode fonts are loaded
-            if (useUnicode) {
-                sb.append(c);
-            } else {
-                // Otherwise, only keep ASCII characters
-                if (c < 128) {
-                    sb.append(c);
-                }
-            }
+            buf.append(c);
         }
 
-        return sb.toString();
+        if (!buf.isEmpty()) {
+            p.add(new Text(buf.toString())
+                    .setFont(sinhalaRun ? sinhala : latin));
+        }
+
+        return p;
     }
 
-    /**
-     * Sanitize text specifically for a font, removing characters that cannot be encoded
-     */
-    private static String sanitizeForFont(String text, PDFont font) {
-        if (text == null || text.isEmpty()) return "";
-
-        StringBuilder result = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-
-            // Handle control characters
-            if (c == '\r' || c == '\n' || c == '\t') {
-                result.append(' ');
-                continue;
-            }
-
-            if (c < 0x20) {
-                continue;
-            }
-
-            // Check if the font can encode this character
-            try {
-                font.encode(String.valueOf(c));
-                result.append(c);
-            } catch (Exception e) {
-                // Character not supported by font, replace with a space or question mark
-                if (c > 127) {
-                    result.append('?'); // Replace unsupported Unicode with ?
-                }
-            }
-        }
-        return result.toString();
+    private static boolean isSinhala(char c) {
+        return c >= '\u0D80' && c <= '\u0DFF';
     }
 
-    /**
-     * Safely get string width, handling encoding errors
-     */
-    private static float safeGetStringWidth(String text, PDFont font, float fontSize) throws IOException {
-        try {
-            return font.getStringWidth(text) / 1000f * fontSize;
-        } catch (IllegalArgumentException e) {
-            // Font doesn't support some characters, sanitize and try again
-            String sanitized = sanitizeForFont(text, font);
-            return font.getStringWidth(sanitized) / 1000f * fontSize;
-        }
-    }
-
-    private static float writeAlignedBlock(PDPageContentStream cs,
-                                          String text,
-                                          float x,
-                                          float y,
-                                          PDFont font,
-                                          float fontSize,
-                                          float maxWidth,
-                                          boolean isRightAligned,
-                                          float pageWidth,
-                                          boolean useUnicode) throws IOException {
-        // Sanitize text for the specific font being used
-        text = sanitizeForFont(text, font);
-        List<String> lines = wrapText(text, maxWidth, font, fontSize);
-        // keep consistent inter-line spacing
-        for (String line : lines) {
-            float lineX = x;
-            if (isRightAligned) {
-                // Calculate actual text width and position from right
-                float textWidth = safeGetStringWidth(line, font, fontSize);
-                lineX = pageWidth - MARGIN - textWidth;
-            }
-
-            cs.beginText();
-            cs.setFont(font, fontSize);
-            cs.newLineAtOffset(lineX, y);
-            cs.showText(line);
-            cs.endText();
-            y -= LEADING;
-        }
-        return y;
-    }
-
-    private static void drawHeader(PDPageContentStream cs, float pageWidth, float pageHeight, PDFont font) throws IOException {
-        String headerText = "DopamineLite";
-        float textWidth = safeGetStringWidth(headerText, font, HEADER_FOOTER_FONT_SIZE);
-        float x = (pageWidth - textWidth) / 2; // Center
-        float y = pageHeight - 30;
-
-        cs.beginText();
-        cs.setFont(font, HEADER_FOOTER_FONT_SIZE);
-        cs.newLineAtOffset(x, y);
-        cs.showText(headerText);
-        cs.endText();
-    }
-
-    private static void drawFooter(PDPageContentStream cs, float pageWidth, PDFont font, int pageNumber) throws IOException {
-        String footerText = "Page " + pageNumber;
-        float textWidth = safeGetStringWidth(footerText, font, HEADER_FOOTER_FONT_SIZE);
-        float x = (pageWidth - textWidth) / 2; // Center
-        float y = 30;
-
-        cs.beginText();
-        cs.setFont(font, HEADER_FOOTER_FONT_SIZE);
-        cs.newLineAtOffset(x, y);
-        cs.showText(footerText);
-        cs.endText();
-    }
-
-    private static float writeLine(PDPageContentStream cs, String text, float y,
-                                   PDFont font, float fontSize, float maxWidth,
-                                   PDFont wrapFont) throws IOException {
-        // Sanitize text for the specific font being used
-        text = sanitizeForFont(text, wrapFont);
-        List<String> lines = wrapText(text, maxWidth, wrapFont, fontSize);
-        for (String line : lines) {
-            cs.beginText();
-            cs.setFont(font, fontSize);
-            cs.newLineAtOffset(PdfGenerator.MARGIN, y);
-            cs.showText(line);
-            cs.endText();
-            y -= LEADING;
-        }
-        return y;
-    }
-
-    private static List<String> wrapText(String text, float maxWidth, PDFont font, float fontSize) throws IOException {
-        List<String> lines = new ArrayList<>();
-        // Sanitize for font first
-        text = sanitizeForFont(text, font);
-        if (text.isEmpty()) {
-            lines.add("");
-            return lines;
-        }
-
-        String[] words = text.split("\\s+");
-        StringBuilder line = new StringBuilder();
-
-        for (String word : words) {
-            String candidate = line.isEmpty() ? word : line + " " + word;
-            float width = safeGetStringWidth(candidate, font, fontSize);
-
-            if (width <= maxWidth) {
-                if (!line.isEmpty()) line.append(' ');
-                line.append(word);
-            } else {
-                // Add current line if not empty
-                if (!line.isEmpty()) {
-                    lines.add(line.toString());
-                    line = new StringBuilder();
-                }
-
-                // Check if the word itself is too long
-                float wordWidth = safeGetStringWidth(word, font, fontSize);
-                if (wordWidth <= maxWidth) {
-                    // Word fits on its own line
-                    line.append(word);
-                } else {
-                    // Word is too long, need to break it character by character
-                    List<String> brokenWord = breakLongWord(word, maxWidth, font, fontSize);
-                    lines.addAll(brokenWord.subList(0, brokenWord.size() - 1));
-                    // Last fragment goes into current line
-                    if (!brokenWord.isEmpty()) {
-                        line.append(brokenWord.get(brokenWord.size() - 1));
-                    }
-                }
-            }
-        }
-
-        if (!line.isEmpty()) {
-            lines.add(line.toString());
-        }
-
-        if (lines.isEmpty()) {
-            lines.add("");
-        }
-
-        return lines;
-    }
-
-    /**
-     * Break a long word into multiple lines by character
-     */
-    private static List<String> breakLongWord(String word, float maxWidth, PDFont font, float fontSize) throws IOException {
-        List<String> fragments = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-
-        for (int i = 0; i < word.length(); i++) {
-            char c = word.charAt(i);
-            String candidate = current.toString() + c;
-            float width = safeGetStringWidth(candidate, font, fontSize);
-
-            if (width <= maxWidth) {
-                current.append(c);
-            } else {
-                // Current fragment is full
-                if (!current.isEmpty()) {
-                    fragments.add(current.toString());
-                    current = new StringBuilder();
-                }
-                // Add the character to new fragment
-                current.append(c);
-            }
-        }
-
-        // Add remaining fragment
-        if (!current.isEmpty()) {
-            fragments.add(current.toString());
-        }
-
-        // Ensure we return at least one fragment
-        if (fragments.isEmpty()) {
-            fragments.add("");
-        }
-
-        return fragments;
-    }
-
-    private static String getUserName(UUID userId, Map<UUID, UserInfo> userMap) {
-        if (userId == null) {
-            return "Unknown User";
-        }
-
-        UserInfo user = userMap.get(userId);
-        if (user != null && user.getFullName() != null && !user.getFullName().isEmpty()) {
-            return user.getFullName();
-        }
-
-        return "Unknown User";
+    // ===== UTILS =====
+    private static String getUserName(UUID id, Map<UUID, UserInfo> map) {
+        if (id == null) return "Unknown User";
+        UserInfo u = map.get(id);
+        return u != null && u.getFullName() != null
+                ? u.getFullName()
+                : "Unknown User";
     }
 
     private static String formatRoleLabel(Role role) {
         if (role == null) return "Unknown";
-
         return switch (role) {
             case ADMIN -> "Admin";
             case MAIN_ADMIN -> "Main Admin";
             case STUDENT -> "Student";
         };
+    }
+
+    private static String safe(String s) {
+        return s == null ? "" : s;
     }
 }

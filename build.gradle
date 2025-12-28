@@ -42,8 +42,9 @@ dependencies {
 
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    implementation 'org.apache.pdfbox:pdfbox:3.0.6'
-
+    implementation 'com.itextpdf:kernel:8.0.2'
+    implementation 'com.itextpdf:layout:8.0.2'
+    implementation 'com.ibm.icu:icu4j:74.2'
 }
 
 tasks.named('test') {
