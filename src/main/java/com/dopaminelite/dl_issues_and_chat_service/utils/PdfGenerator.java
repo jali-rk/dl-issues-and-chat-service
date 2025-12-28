@@ -9,10 +9,14 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -22,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 public class PdfGenerator {
 
     private static final float MARGIN = 50f;
@@ -46,8 +51,43 @@ public class PdfGenerator {
 
         try (PDDocument doc = new PDDocument(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
 
-            PDType1Font regularFont = new PDType1Font(Standard14Fonts.FontName.TIMES_ROMAN);
-            PDType1Font headerFont = new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
+            // Load Noto Sans font which supports Unicode (including Sinhala)
+            PDFont regularFont;
+            PDFont headerFont;
+            boolean unicodeFontsLoaded = false;
+
+            try {
+                // Use Noto Sans which has full Unicode support including Sinhala
+                InputStream fontStream = PdfGenerator.class.getResourceAsStream("/fonts/NotoSans-Regular.ttf");
+                if (fontStream != null) {
+                    regularFont = PDType0Font.load(doc, fontStream);
+                    log.info("Successfully loaded NotoSans-Regular font");
+                } else {
+                    log.warn("NotoSans-Regular.ttf not found in resources");
+                    regularFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                }
+
+                InputStream boldFontStream = PdfGenerator.class.getResourceAsStream("/fonts/NotoSans-Bold.ttf");
+                if (boldFontStream != null) {
+                    headerFont = PDType0Font.load(doc, boldFontStream);
+                    log.info("Successfully loaded NotoSans-Bold font");
+                } else {
+                    log.warn("NotoSans-Bold.ttf not found in resources");
+                    headerFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+                }
+
+                // Check if both fonts are Unicode fonts
+                unicodeFontsLoaded = (regularFont instanceof PDType0Font) && (headerFont instanceof PDType0Font);
+                log.info("Unicode fonts loaded: {}", unicodeFontsLoaded);
+            } catch (Exception e) {
+                log.error("Failed to load Sinhala fonts, falling back to Helvetica: {}", e.getMessage());
+                // Fallback to basic fonts if Unicode fonts aren't available
+                regularFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+                headerFont = new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
+                unicodeFontsLoaded = false;
+            }
+
+            final boolean useUnicode = unicodeFontsLoaded;
 
             PDPage page = new PDPage(PDRectangle.LETTER);
             doc.addPage(page);
@@ -65,12 +105,12 @@ public class PdfGenerator {
 
             // Issue title
             String titleText = String.format("Issue Report - Issue No. : %d", issue.getIssueNumber());
-            curY = writeLine(cs, sanitize(titleText), curY, headerFont, TITLE_FONT_SIZE, maxTextWidth, headerFont);
+            curY = writeLine(cs, sanitize(titleText, useUnicode), curY, headerFont, TITLE_FONT_SIZE, maxTextWidth, headerFont);
 
             // Issue details
-            curY = writeLine(cs, sanitize("Issue ID: " + issue.getId()), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
-            curY = writeLine(cs, sanitize("Title: " + issue.getTitle()), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
-            curY = writeLine(cs, sanitize("Description: " + issue.getDescription()), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
+            curY = writeLine(cs, sanitize("Issue ID: " + issue.getId(), useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
+            curY = writeLine(cs, sanitize("Title: " + issue.getTitle(), useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
+            curY = writeLine(cs, sanitize("Description: " + issue.getDescription(), useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
             curY = writeLine(cs, "Status: " + issue.getStatus(), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
 
             // Display assigned admin's name
@@ -83,13 +123,13 @@ public class PdfGenerator {
                     assignedAdminName = issue.getAssignedAdminId().toString();
                 }
             }
-            curY = writeLine(cs, "Assigned Admin: " + assignedAdminName, curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
+            curY = writeLine(cs, sanitize("Assigned Admin: " + assignedAdminName, useUnicode), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
 
             curY = writeLine(cs, "Created At: " + READABLE_DATE_FORMAT.format(issue.getCreatedAt()), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
             curY = writeLine(cs, "Solved At: " + (issue.getSolvedAt() != null ? READABLE_DATE_FORMAT.format(issue.getSolvedAt()) : "N/A"), curY, regularFont, DETAILS_FONT_SIZE, maxTextWidth, regularFont);
 
             curY -= LEADING; // blank line
-            curY = writeLine(cs, sanitize("Conversation:"), curY, headerFont, FONT_SIZE, maxTextWidth, headerFont);
+            curY = writeLine(cs, sanitize("Conversation:", useUnicode), curY, headerFont, FONT_SIZE, maxTextWidth, headerFont);
             curY -= LEADING / 2;
 
             // Group messages by date
@@ -121,7 +161,8 @@ public class PdfGenerator {
 
                 // Draw centered date header
                 String dateStr = DATE_HEADER_FORMAT.format(date);
-                float dateWidth = regularFont.getStringWidth(dateStr) / 1000f * DATE_HEADER_FONT_SIZE;
+                dateStr = sanitizeForFont(dateStr, regularFont);
+                float dateWidth = safeGetStringWidth(dateStr, regularFont, DATE_HEADER_FONT_SIZE);
                 float dateX = (pageWidth - dateWidth) / 2;
 
                 cs.beginText();
@@ -162,11 +203,11 @@ public class PdfGenerator {
                 }
 
                 // Meta line (smaller, italic-ish)
-                curY = writeAlignedBlock(cs, sanitize(meta), baseX, curY, regularFont, MESSAGE_META_FONT_SIZE, bubbleWidth, isAdminSide, pageWidth);
+                curY = writeAlignedBlock(cs, sanitize(meta, useUnicode), baseX, curY, regularFont, MESSAGE_META_FONT_SIZE, bubbleWidth, isAdminSide, pageWidth, useUnicode);
 
                 // Body lines (normal)
                 String body = m.getContent() != null ? m.getContent() : "";
-                curY = writeAlignedBlock(cs, sanitize(body), baseX, curY, regularFont, MESSAGE_BODY_FONT_SIZE, bubbleWidth, isAdminSide, pageWidth);
+                curY = writeAlignedBlock(cs, sanitize(body, useUnicode), baseX, curY, regularFont, MESSAGE_BODY_FONT_SIZE, bubbleWidth, isAdminSide, pageWidth, useUnicode);
 
                 curY -= MESSAGE_GAP;
                 }
@@ -184,61 +225,124 @@ public class PdfGenerator {
     }
 
     /**
-     * PDFBox built-in Type1 fonts only support WinAnsiEncoding.
-     * Strip control chars and replace unsupported whitespace/separators with safe ASCII.
+     * Clean control characters from text but preserve Unicode characters
+     * Also removes characters that the font cannot encode
      */
-    private static String sanitize(String s) {
+    private static String sanitize(String s, boolean useUnicode) {
         if (s == null) return "";
 
-        // 1) Remove NUL and other control chars except \n and \t (we later convert newlines to spaces anyway)
-        String out = s
-                .replace('\u0000', ' ')
-                .replace('\r', '\n');
+        StringBuilder sb = new StringBuilder(s.length());
 
-        StringBuilder sb = new StringBuilder(out.length());
-        for (int i = 0; i < out.length(); i++) {
-            char c = out.charAt(i);
-            if (c == '\n' || c == '\t' || c >= 0x20) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+
+            // Handle common control characters
+            if (c == '\r' || c == '\n' || c == '\t') {
+                sb.append(' ');
+                continue;
+            }
+
+            // Skip null and other control characters
+            if (c < 0x20) {
+                continue;
+            }
+
+            // Keep all Unicode characters (including Sinhala, Arabic, Chinese, etc.) if Unicode fonts are loaded
+            if (useUnicode) {
                 sb.append(c);
+            } else {
+                // Otherwise, only keep ASCII characters
+                if (c < 128) {
+                    sb.append(c);
+                }
             }
         }
 
-        // 2) PDF text operators don't accept raw newlines; turn them into spaces
-        return sb.toString().replace('\n', ' ');
+        return sb.toString();
+    }
+
+    /**
+     * Sanitize text specifically for a font, removing characters that cannot be encoded
+     */
+    private static String sanitizeForFont(String text, PDFont font) {
+        if (text == null || text.isEmpty()) return "";
+
+        StringBuilder result = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            // Handle control characters
+            if (c == '\r' || c == '\n' || c == '\t') {
+                result.append(' ');
+                continue;
+            }
+
+            if (c < 0x20) {
+                continue;
+            }
+
+            // Check if the font can encode this character
+            try {
+                font.encode(String.valueOf(c));
+                result.append(c);
+            } catch (Exception e) {
+                // Character not supported by font, replace with a space or question mark
+                if (c > 127) {
+                    result.append('?'); // Replace unsupported Unicode with ?
+                }
+            }
+        }
+        return result.toString();
+    }
+
+    /**
+     * Safely get string width, handling encoding errors
+     */
+    private static float safeGetStringWidth(String text, PDFont font, float fontSize) throws IOException {
+        try {
+            return font.getStringWidth(text) / 1000f * fontSize;
+        } catch (IllegalArgumentException e) {
+            // Font doesn't support some characters, sanitize and try again
+            String sanitized = sanitizeForFont(text, font);
+            return font.getStringWidth(sanitized) / 1000f * fontSize;
+        }
     }
 
     private static float writeAlignedBlock(PDPageContentStream cs,
                                           String text,
                                           float x,
                                           float y,
-                                          PDType1Font font,
+                                          PDFont font,
                                           float fontSize,
                                           float maxWidth,
                                           boolean isRightAligned,
-                                          float pageWidth) throws IOException {
-        List<String> lines = wrapText(sanitize(text), maxWidth, font, fontSize);
+                                          float pageWidth,
+                                          boolean useUnicode) throws IOException {
+        // Sanitize text for the specific font being used
+        text = sanitizeForFont(text, font);
+        List<String> lines = wrapText(text, maxWidth, font, fontSize);
         // keep consistent inter-line spacing
         for (String line : lines) {
             float lineX = x;
             if (isRightAligned) {
                 // Calculate actual text width and position from right
-                float textWidth = font.getStringWidth(sanitize(line)) / 1000f * fontSize;
+                float textWidth = safeGetStringWidth(line, font, fontSize);
                 lineX = pageWidth - MARGIN - textWidth;
             }
 
             cs.beginText();
             cs.setFont(font, fontSize);
             cs.newLineAtOffset(lineX, y);
-            cs.showText(sanitize(line));
+            cs.showText(line);
             cs.endText();
             y -= LEADING;
         }
         return y;
     }
 
-    private static void drawHeader(PDPageContentStream cs, float pageWidth, float pageHeight, PDType1Font font) throws IOException {
+    private static void drawHeader(PDPageContentStream cs, float pageWidth, float pageHeight, PDFont font) throws IOException {
         String headerText = "DopamineLite";
-        float textWidth = font.getStringWidth(headerText) / 1000f * HEADER_FOOTER_FONT_SIZE;
+        float textWidth = safeGetStringWidth(headerText, font, HEADER_FOOTER_FONT_SIZE);
         float x = (pageWidth - textWidth) / 2; // Center
         float y = pageHeight - 30;
 
@@ -249,9 +353,9 @@ public class PdfGenerator {
         cs.endText();
     }
 
-    private static void drawFooter(PDPageContentStream cs, float pageWidth, PDType1Font font, int pageNumber) throws IOException {
+    private static void drawFooter(PDPageContentStream cs, float pageWidth, PDFont font, int pageNumber) throws IOException {
         String footerText = "Page " + pageNumber;
-        float textWidth = font.getStringWidth(footerText) / 1000f * HEADER_FOOTER_FONT_SIZE;
+        float textWidth = safeGetStringWidth(footerText, font, HEADER_FOOTER_FONT_SIZE);
         float x = (pageWidth - textWidth) / 2; // Center
         float y = 30;
 
@@ -263,23 +367,26 @@ public class PdfGenerator {
     }
 
     private static float writeLine(PDPageContentStream cs, String text, float y,
-                                   PDType1Font font, float fontSize, float maxWidth,
-                                   PDType1Font wrapFont) throws IOException {
-        List<String> lines = wrapText(sanitize(text), maxWidth, wrapFont, fontSize);
+                                   PDFont font, float fontSize, float maxWidth,
+                                   PDFont wrapFont) throws IOException {
+        // Sanitize text for the specific font being used
+        text = sanitizeForFont(text, wrapFont);
+        List<String> lines = wrapText(text, maxWidth, wrapFont, fontSize);
         for (String line : lines) {
             cs.beginText();
             cs.setFont(font, fontSize);
             cs.newLineAtOffset(PdfGenerator.MARGIN, y);
-            cs.showText(sanitize(line));
+            cs.showText(line);
             cs.endText();
             y -= LEADING;
         }
         return y;
     }
 
-    private static List<String> wrapText(String text, float maxWidth, PDType1Font font, float fontSize) throws IOException {
+    private static List<String> wrapText(String text, float maxWidth, PDFont font, float fontSize) throws IOException {
         List<String> lines = new ArrayList<>();
-        text = sanitize(text);
+        // Sanitize for font first
+        text = sanitizeForFont(text, font);
         if (text.isEmpty()) {
             lines.add("");
             return lines;
@@ -290,18 +397,31 @@ public class PdfGenerator {
 
         for (String word : words) {
             String candidate = line.isEmpty() ? word : line + " " + word;
-            float width = font.getStringWidth(candidate) / 1000f * fontSize;
+            float width = safeGetStringWidth(candidate, font, fontSize);
 
             if (width <= maxWidth) {
                 if (!line.isEmpty()) line.append(' ');
                 line.append(word);
             } else {
+                // Add current line if not empty
                 if (!line.isEmpty()) {
                     lines.add(line.toString());
-                    line = new StringBuilder(word);
+                    line = new StringBuilder();
+                }
+
+                // Check if the word itself is too long
+                float wordWidth = safeGetStringWidth(word, font, fontSize);
+                if (wordWidth <= maxWidth) {
+                    // Word fits on its own line
+                    line.append(word);
                 } else {
-                    // Single word too long, break it
-                    lines.add(word);
+                    // Word is too long, need to break it character by character
+                    List<String> brokenWord = breakLongWord(word, maxWidth, font, fontSize);
+                    lines.addAll(brokenWord.subList(0, brokenWord.size() - 1));
+                    // Last fragment goes into current line
+                    if (!brokenWord.isEmpty()) {
+                        line.append(brokenWord.get(brokenWord.size() - 1));
+                    }
                 }
             }
         }
@@ -315,6 +435,44 @@ public class PdfGenerator {
         }
 
         return lines;
+    }
+
+    /**
+     * Break a long word into multiple lines by character
+     */
+    private static List<String> breakLongWord(String word, float maxWidth, PDFont font, float fontSize) throws IOException {
+        List<String> fragments = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+
+        for (int i = 0; i < word.length(); i++) {
+            char c = word.charAt(i);
+            String candidate = current.toString() + c;
+            float width = safeGetStringWidth(candidate, font, fontSize);
+
+            if (width <= maxWidth) {
+                current.append(c);
+            } else {
+                // Current fragment is full
+                if (!current.isEmpty()) {
+                    fragments.add(current.toString());
+                    current = new StringBuilder();
+                }
+                // Add the character to new fragment
+                current.append(c);
+            }
+        }
+
+        // Add remaining fragment
+        if (!current.isEmpty()) {
+            fragments.add(current.toString());
+        }
+
+        // Ensure we return at least one fragment
+        if (fragments.isEmpty()) {
+            fragments.add("");
+        }
+
+        return fragments;
     }
 
     private static String getUserName(UUID userId, Map<UUID, UserInfo> userMap) {
