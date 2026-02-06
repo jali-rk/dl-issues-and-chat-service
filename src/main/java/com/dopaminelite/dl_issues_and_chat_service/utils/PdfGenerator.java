@@ -42,17 +42,19 @@ public class PdfGenerator {
     private static final float HEADER_FOOTER_FONT_SIZE = 10f;
     private static final float DATE_HEADER_FONT_SIZE = 11f;
 
+    private static final ZoneId COLOMBO_ZONE = ZoneId.of("Asia/Colombo");
+
     private static final DateTimeFormatter READABLE_DATE_FORMAT =
             DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm:ss")
-                    .withZone(ZoneId.systemDefault());
+                    .withZone(COLOMBO_ZONE);
 
     private static final DateTimeFormatter MESSAGE_TIME_FORMAT =
             DateTimeFormatter.ofPattern("HH:mm")
-                    .withZone(ZoneId.systemDefault());
+                    .withZone(COLOMBO_ZONE);
 
     private static final DateTimeFormatter DATE_HEADER_FORMAT =
             DateTimeFormatter.ofPattern("dd MMMM yyyy")
-                    .withZone(ZoneId.systemDefault());
+                    .withZone(COLOMBO_ZONE);
 
     public static byte[] generateIssueReport(
             Issue issue,
@@ -69,7 +71,6 @@ public class PdfGenerator {
             PdfFont latinRegular = loadFont("fonts/NotoSans-Regular.ttf");
             PdfFont latinBold = loadFont("fonts/NotoSans-Bold.ttf");
             PdfFont sinhalaRegular = loadFont("fonts/NotoSansSinhala-Regular.ttf");
-            PdfFont sinhalaBold = loadFont("fonts/NotoSansSinhala-Bold.ttf");
 
             // Register footer event handler
             pdf.addEventHandler(PdfDocumentEvent.END_PAGE, new FooterHandler(latinRegular));
@@ -147,7 +148,7 @@ public class PdfGenerator {
             Map<LocalDate, List<IssueMessage>> grouped = new LinkedHashMap<>();
             for (IssueMessage m : messages) {
                 LocalDate d = m.getCreatedAt()
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(COLOMBO_ZONE)
                         .toLocalDate();
                 grouped.computeIfAbsent(d, k -> new ArrayList<>()).add(m);
             }
@@ -267,7 +268,7 @@ public class PdfGenerator {
         Paragraph p = new Paragraph()
                 .setFontSize(size)
                 .setTextAlignment(alignment)
-                .setMultipliedLeading(0.75f);;
+                .setMultipliedLeading(0.75f);
 
         if (text == null || text.isEmpty()) return p;
 
