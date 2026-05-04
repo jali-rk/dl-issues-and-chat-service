@@ -23,7 +23,7 @@ public class PaymentAnalyticsController {
             @RequestParam List<UUID> includePortalIds,
             @RequestParam(required = false) List<UUID> excludePortalIds
     ) {
-        log.debug("Fetching dropout students - Include portals: {}, Exclude portals: {}", 
+        log.debug("Fetching dropout students - includePortalIds: {}, excludePortalIds: {}",
                 includePortalIds, excludePortalIds);
 
         List<DropoutStudentResponse> dropoutStudents = paymentServiceClient.getDropoutStudents(
@@ -31,6 +31,7 @@ public class PaymentAnalyticsController {
                 excludePortalIds
         );
 
+        log.debug("Returning {} dropout students", dropoutStudents.size());
         return ResponseEntity.ok(dropoutStudents);
     }
 }
